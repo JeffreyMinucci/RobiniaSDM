@@ -1,6 +1,9 @@
 ###########
 ###   Code for fitting and tuning gbms to the black locust FIA presence/absence data 
 ###   Goal: End with one best model which can be used for predictions
+### 
+###   Best model so far: interaction depth = 21, n.minobsinnode = 5, n.trees = 1300, shrinkage = 0.01
+###                    CV performance: AUC=0.9297, Sensitivity = 0.7228, Specificity = 0.9231
 #########
 
 
@@ -18,20 +21,21 @@ library(gstat)
 
 
 #Read data and format
-PA <- read.csv("Datafiles/PA.national.6.5.csv") #now using reduced factors & elevation
+PA <- read.csv("Datafiles/data.national.6.5.csv") #now using reduced factors & elevation
 PA$lith.pred <- factor(PA$lith.pred)
 PA$Primary.rocktype <- factor(PA$Primary.rocktype)
 PA$Secondary.rocktype <- factor(PA$Secondary.rocktype)
 PA$usda_tex <- factor(PA$usda_tex)
 PA$pres <- factor(PA$pres,levels=c("Present",'Absent'))
 PA <- PA[,colnames(PA)!="PlotID"]
+PA <- PA[,c(6,9,1:5,7,8,10:length(PA))] #reorder to put responses first
 set.seed(1337)
 intrain <- createDataPartition(y=PA$pres,p=0.8,list=FALSE)
 PA.train.full <- PA[intrain,]
 PA.test.full <-  PA[-intrain,]
-PA.train <- PA.train.full[,c(-4)]
+PA.train <- PA.train.full[,c(-2)] #Remove IV values (unused response var)
 PA.train <- PA.train[c(2,1:nrow(PA.train)),]  ### Put an absent as the first value
-PA.test <- PA.test.full[,c(-4)]
+PA.test <- PA.test.full[,c(-2)] #Remove IV values (unused response var)
 PA.train.c <- PA.train[complete.cases(PA.train),]
 
 
@@ -67,7 +71,7 @@ max <- detectCores()
 c1 <- makeCluster(round(max*.5))
 registerDoParallel(c1)
 set.seed(8081)
-smote.tune <- train(PA.train[,-6],PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
+smote.tune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
 #saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbmTune_3_7_17v6.rds")
 smote.tune
 ## STOP Parallel and restart
@@ -80,7 +84,7 @@ max <- detectCores()
 c1 <- makeCluster(round(max*.5))
 registerDoParallel(c1)
 set.seed(8081)
-smote.tune2 <- train(PA.train[,-6],PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid.2,metric="ROC")
+smote.tune2 <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid.2,metric="ROC")
 smote.tune2
 ## STOP Parallel and restart
 stopCluster(c1)
@@ -93,7 +97,7 @@ registerDoParallel(c1)
 ctrlParFast_noSmote <- ctrlParFast
 ctrlParFast_noSmote$sampling = NULL
 set.seed(8081)
-orig.tune <- train(PA.train[,-6],PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
+orig.tune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
 orig.tune
 stopCluster(c1)
 registerDoParallel()
@@ -106,7 +110,7 @@ registerDoParallel(c1)
 ctrlParFast_down <- ctrlParFast
 ctrlParFast_down$sampling = "down"
 set.seed(8081)
-down.tune <- train(PA.train[,-6],PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
+down.tune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
 down.tune
 stopCluster(c1)
 registerDoParallel()
@@ -152,7 +156,7 @@ plot(smote.tune$finalModel,i.var='bio11',type="response")
 
 #Find optimum threshold for class "Present"- based on training data
 pres.abs <- ifelse(PA.train$pres == "Present",1,0)
-predicted.PA.train <- predict(smote.tune,newdata=PA.train[,-6],type="prob",na.action=na.pass) #predict on train
+predicted.PA.train <- predict(smote.tune,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
 t.opt <- optim.thresh((obs=as.numeric(pres.abs)),pred=predicted.PA.train$Present)
 
 
@@ -227,6 +231,51 @@ auc(roc.5)
 
 
 
+#####
+#  6/19/17 - Try bayesian optimization of hyperparameters - optimize Depth and n.minobsinnode, try all ntrees 
+#             Give stats for best ntrees value
+####
+library(rBayesianOptimization)
+
+gbmFit_bayes <- function(interaction.depth, n.minobsinnode){
+    set.seed(15325)
+    n.trees <- seq(from=100,to=3000,by=100)
+    shrinkage <- 0.01
+    model <- train(data.train[,-1],data.train[,1],method='gbm',
+                   trControl=ctrlParFast, tuneGrid = data.frame(interaction.depth, n.trees, shrinkage, n.minobsinnode))
+    list(Score = -getTrainPerf(model)[, "TrainRMSE"], Pred = 0)
+    
+}
+
+## Define the bounds of the search
+bounds <- list(interaction.depth = c(1L,34L),
+               n.minobsinnode = c(1L, 25L))
+
+bayes_search <- BayesianOptimization(gbmFit_bayes,bounds=bounds,    init_points = 1, #init_grid_dt=rand_search_bayes, 
+                                     n_iter=2,acq="ucb", kappa=1, eps=0.0, verbose=T,
+                                     kernel=list(type="matern", nu=5/2))
+saveRDS(bayes_search3,file="Objects/PA_GBM_Models/6_19_17_bayes.rds")
+
+
+
+
+
+########
+# Best model so far
+######
+bestMod <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+
+getTrainPerf(bestMod)
+#Find optimum threshold for class "Present"- based on training data
+pres.abs <- ifelse(PA.train$pres == "Present",1,0)
+predicted.PA.train <- predict(bestMod,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
+t.opt <- optim.thresh((obs=as.numeric(pres.abs)),pred=predicted.PA.train$Present)
+predicted.PA.train.class <- ifelse(predicted.PA.train$Present> thresh,"Present","Absent")
+confusionMatrix(predicted.PA.train.class,pres.abs)
+
+
+
+
 
 ######
 # Fit GBM with ONLY climate data
@@ -261,7 +310,7 @@ ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=T
 
 #Fit GBM w smote
 set.seed(8081)
-smote.tune <- train(PA.train.clim,PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
+smote.tune <- train(PA.train.clim,PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
 #saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbm_clim_env_3_13_17.rds")
 smote.tune
 ## STOP Parallel and restart
@@ -284,7 +333,7 @@ thresh <- t.opt$`sensitivity=specificity`
 
 #compare performance on test set - using threshold and P/A prediction
 predicted.PA.class <- ifelse(predicted.PA$Present> thresh,"Present","Absent")
-confusionMatrix(predicted.PA.test.class,PA.test[,6])
+confusionMatrix(predicted.PA.test.class,PA.test[,1])
 
 ## Fit gbm with only soil data 
 
@@ -314,7 +363,7 @@ ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=T
 
 #Fit GBM w smote
 set.seed(8081)
-smote.tune <- train(PA.train.nonclim,PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
+smote.tune <- train(PA.train.nonclim,PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
 #saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbm_nonclim_3_13_17.rds")
 smote.tune
 ## STOP Parallel and restart
