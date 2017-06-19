@@ -41,7 +41,7 @@ results_list <- vector("list",length(gcms))
 raster_list <- vector("list",length(gcms))
 d_raster_list <- vector("list",length(gcms))
 for (i in 1:length(gcms)){
-  data <- readRDS(paste("Objects/PA_climate_proj_",gcms[i],".rds",sep="")) #load climate proj. data
+  data <- readRDS(paste("Objects/GCM_prob_data/PA_climate_proj_",gcms[i],".rds",sep="")) #load climate proj. data
   predictions <- predict(sdm1,newdata=data[,-c(6)],type="prob",na.action=na.pass) #predict on projection
   data <- cbind(data,predictions)
   #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
@@ -64,15 +64,15 @@ for (i in 1:length(gcms)){
   names(d_raster_list)[i]<- gcms[i]
 }
   
-saveRDS(results_list,"Objects/gcm_predictions_unique.rds")
+#saveRDS(results_list,"Objects/gcm_predictions_unique.rds")
 #saveRDS(raster_list,"RasterOutput/gcm_predict_rasters.rds")
 #saveRDS(d_raster_list,"RasterOutput/gcm_predict_rasters_delta.rds")
 
 #convert rasters to rasterstacks
 raster_stack <- stack(raster_list)
 d_raster_stack <- stack(d_raster_list)
-saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_unique.rds")
-saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_unique.rds") #for change (delta) from present
+#saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_unique.rds")
+#saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_unique.rds") #for change (delta) from present
 
 ########
 ## 

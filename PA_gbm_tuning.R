@@ -68,7 +68,7 @@ c1 <- makeCluster(round(max*.5))
 registerDoParallel(c1)
 set.seed(8081)
 smote.tune <- train(PA.train[,-6],PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid,metric="ROC")
-#saveRDS(smote.tune,file="Objects/gbmTune_3_7_17v6.rds")
+#saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbmTune_3_7_17v6.rds")
 smote.tune
 ## STOP Parallel and restart
 stopCluster(c1)
@@ -185,12 +185,12 @@ auc(roc.obj)
 
 
 #compare four different depths from models previously fit
-tune1<- readRDS("Objects/gbmTune_3_6_17.rds")
-tune2 <- readRDS("Objects/gbmTune_3_7_17v2.rds")
-tune3 <- readRDS("Objects/gbmTune_3_7_17v3.rds")
-tune4 <- readRDS("Objects/gbmTune_3_7_17v4.rds")
-tune5 <- readRDS("Objects/gbmTune_3_7_17v5.rds")
-tune6 <- readRDS("Objects/gbmTune_3_7_17v6.rds")
+tune1<- readRDS("Objects/PA_GBM_Models/gbmTune_3_6_17.rds")
+tune2 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+tune3 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v3.rds")
+tune4 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v4.rds")
+tune5 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v5.rds")
+tune6 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v6.rds")
 models <- list("Depth 22, min=5"=tune1,"Depth 21, min=5"=tune2,"Depth 19, min=4"=tune3,"Depth 17, min=2"=tune4, "Depth 15, min=2"=tune5,"Depth 5, min=3"=tune6)
 resamps <- resamples(models)
 summary(resamps)
@@ -262,7 +262,7 @@ ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=T
 #Fit GBM w smote
 set.seed(8081)
 smote.tune <- train(PA.train.clim,PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
-saveRDS(smote.tune,file="Objects/gbm_clim_env_3_13_17.rds")
+#saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbm_clim_env_3_13_17.rds")
 smote.tune
 ## STOP Parallel and restart
 stopCluster(c1)
@@ -315,7 +315,7 @@ ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=T
 #Fit GBM w smote
 set.seed(8081)
 smote.tune <- train(PA.train.nonclim,PA.train[,6],method='gbm', trControl=ctrlParFast,tuneGrid=gbmGrid2,metric="ROC")
-saveRDS(smote.tune,file="Objects/gbm_nonclim_3_13_17.rds")
+#saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbm_nonclim_3_13_17.rds")
 smote.tune
 ## STOP Parallel and restart
 stopCluster(c1)
