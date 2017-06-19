@@ -43,7 +43,7 @@ saveRDS(PA.test.full,"Datafiles/Test_data_6.5.csv")
 ### Load the best model found so far (from PA_gbm_tuning code)
 ### Depth = 21, shrinkage=0.01, n.min.obsinnode = 5, n.trees=1300
 
-sdm1 <- readRDS("Objects/gbmTune_3_7_17v2.rds")
+sdm1 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
 
 
 
@@ -361,21 +361,21 @@ plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
 ##################
 # Map climate projected differences
 ####
-bioclim.he <- readRDS("Objects/bioclim_HE.rds")
-bioclim <- readRDS("Objects/bioclim.rds")
-
-plot(bioclim.he$bio5 - bioclim$bio5,ylim=c(25,50)) # Change in max temp of warmest month
-plot(usa,add=T)
-
-plot(bioclim.he$bio12 - bioclim$bio12,ylim=c(25,50)) # Change in annual preicp
-plot(usa,add=T)
-
-plot(bioclim.he$bio10 - bioclim$bio10,ylim=c(25,50)) # Change in annual preicp
-plot(usa,add=T)
-
-plot(bioclim$bio4) #temp seasonality
-plot(bioclim.he$bio4 - bioclim$bio4,ylim=c(25,50)) # Change in temp seasonality
-plot(usa,add=T)
-
-plot(bioclim$bio15,ylim=c(30,45))
-plot(usa,add=T)
+#bioclim.he <- readRDS("Objects/bioclim_HE.rds")
+#bioclim <- readRDS("Objects/bioclim.rds")
+#
+#plot(bioclim.he$bio5 - bioclim$bio5,ylim=c(25,50)) # Change in max temp of warmest month
+#plot(usa,add=T)
+#
+#plot(bioclim.he$bio12 - bioclim$bio12,ylim=c(25,50)) # Change in annual preicp
+#plot(usa,add=T)
+#
+#plot(bioclim.he$bio10 - bioclim$bio10,ylim=c(25,50)) # Change in annual preicp
+#plot(usa,add=T)
+#
+#plot(bioclim$bio4) #temp seasonality
+#plot(bioclim.he$bio4 - bioclim$bio4,ylim=c(25,50)) # Change in temp seasonality
+#plot(usa,add=T)
+#
+#plot(bioclim$bio15,ylim=c(30,45))
+#plot(usa,add=T)

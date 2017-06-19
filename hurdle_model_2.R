@@ -2,7 +2,7 @@
 #### Code to fit Hurdle model of black locust abundance:
 #### combining presence/absence and regression stages of modeling into one model
 #### 
-#### At bottom: trying a non-hurdle geoadditive boosted GAM (geoGAM package
+#### At bottom: trying a non-hurdle geoadditive boosted GAM (geoGAM package)
 ####
 #### By: Jeff Minucci
 #### Date:4/21/17
