@@ -59,7 +59,7 @@ gbmGrid.3 <-  expand.grid(interaction.depth =c(3),
                           n.minobsinnode = c(5,10,15))
 
 #CV control settings
-ctrlPar <- trainControl(method='repeatedcv', repeats=5,allowParallel=TRUE,classProbs=TRUE,summaryFunction=twoClassSummary)
+ctrlPar <- trainControl(method='repeatedcv', repeats=5,allowParallel=TRUE,classProbs=TRUE,summaryFunction=twoClassSummary,sampling="smote")
 ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=TRUE,
                             summaryFunction=twoClassSummary,
                             sampling = "smote")
@@ -241,7 +241,7 @@ gbmFit_bayes <- function(interaction.depth, n.minobsinnode){
     set.seed(15325)
     n.trees <- seq(from=100,to=3000,by=100)
     shrinkage <- 0.01
-    model <- train(data.train[,-1],data.train[,1],method='gbm',
+    model <- train(PA.train[,-1],PA.train[,1],method='gbm',
                    trControl=ctrlParFast, tuneGrid = data.frame(interaction.depth, n.trees, shrinkage, n.minobsinnode))
     list(Score = -getTrainPerf(model)[, "TrainRMSE"], Pred = 0)
     
