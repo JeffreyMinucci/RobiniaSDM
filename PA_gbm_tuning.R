@@ -228,7 +228,11 @@ predicted.PA.5 <- predict(tune6,newdata=PA.test[,-6],type="prob",na.action=na.pa
 roc.5 <- roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.5$Present)
 auc(roc.5) 
 
-
+########
+# Best so far
+######
+bestMod <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+getTrainPerf(bestMod)
 
 
 #####
