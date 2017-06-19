@@ -241,9 +241,13 @@ gbmFit_bayes <- function(interaction.depth, n.minobsinnode){
     set.seed(15325)
     n.trees <- seq(from=100,to=3000,by=100)
     shrinkage <- 0.01
-    model <- train(PA.train[,-1],PA.train[,1],method='gbm',
+    ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=TRUE,
+                                summaryFunction=twoClassSummary,
+                                sampling = "smote")
+    model <- train(PA.train[,-1],PA.train[,1],method='gbm',metric="ROC",
                    trControl=ctrlParFast, tuneGrid = data.frame(interaction.depth, n.trees, shrinkage, n.minobsinnode))
-    list(Score = -getTrainPerf(model)[, "TrainRMSE"], Pred = 0)
+    list(Score = getTrainPerf(model)[, "TrainROC"], Pred = 0)
+    
     
 }
 
@@ -251,8 +255,8 @@ gbmFit_bayes <- function(interaction.depth, n.minobsinnode){
 bounds <- list(interaction.depth = c(1L,34L),
                n.minobsinnode = c(1L, 25L))
 
-bayes_search <- BayesianOptimization(gbmFit_bayes,bounds=bounds,    init_points = 1, #init_grid_dt=rand_search_bayes, 
-                                     n_iter=2,acq="ucb", kappa=1, eps=0.0, verbose=T,
+bayes_search <- BayesianOptimization(gbmFit_bayes,bounds=bounds,    init_points = 20, #init_grid_dt=rand_search_bayes, 
+                                     n_iter=30,acq="ucb", kappa=1, eps=0.0, verbose=T,
                                      kernel=list(type="matern", nu=5/2))
 saveRDS(bayes_search3,file="Objects/PA_GBM_Models/6_19_17_bayes.rds")
 
