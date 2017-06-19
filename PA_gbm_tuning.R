@@ -1,6 +1,9 @@
 ###########
 ###   Code for fitting and tuning gbms to the black locust FIA presence/absence data 
 ###   Goal: End with one best model which can be used for predictions
+### 
+###   Best model so far: interaction depth = 21, n.minobsinnode = 5, n.trees = 1300, shrinkage = 0.01
+###                    CV performance: AUC=0.9297, Sensitivity = 0.7228, Specificity = 0.9231
 #########
 
 
@@ -224,7 +227,11 @@ predicted.PA.5 <- predict(tune6,newdata=PA.test[,-6],type="prob",na.action=na.pa
 roc.5 <- roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.5$Present)
 auc(roc.5) 
 
-
+########
+# Best so far
+######
+bestMod <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+getTrainPerf(bestMod)
 
 
 
