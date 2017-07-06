@@ -34,7 +34,7 @@ intrain <- createDataPartition(y=PA$pres,p=0.8,list=FALSE)
 PA.train.full <- PA[intrain,]
 PA.test.full <-  PA[-intrain,]
 PA.train <- PA.train.full[,c(-2)] #Remove IV values (unused response var)
-PA.train <- PA.train[c(2,1:nrow(PA.train)),]  ### Put an absent as the first value
+#PA.train <- PA.train[c(2,1:nrow(PA.train)),]  ### Put an absent as the first value
 PA.test <- PA.test.full[,c(-2)] #Remove IV values (unused response var)
 PA.train.c <- PA.train[complete.cases(PA.train),]
 
@@ -59,7 +59,7 @@ gbmGrid.3 <-  expand.grid(interaction.depth =c(3),
                           n.minobsinnode = c(5,10,15))
 
 #CV control settings
-ctrlPar <- trainControl(method='repeatedcv', repeats=5,allowParallel=TRUE,classProbs=TRUE,summaryFunction=twoClassSummary,sampling="smote")
+ctrlPar <- trainControl(method='repeatedcv',number=5, repeats=5,allowParallel=TRUE,classProbs=TRUE,summaryFunction=twoClassSummary,sampling="smote")
 ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=TRUE,
                             summaryFunction=twoClassSummary,
                             sampling = "smote")
@@ -105,6 +105,7 @@ registerDoParallel()
 
 
 #Fit GBM w downsampling
+max <- detectCores()
 c1 <- makeCluster(round(max*.5))
 registerDoParallel(c1)
 ctrlParFast_down <- ctrlParFast
@@ -229,6 +230,86 @@ roc.5 <- roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.5$Present)
 auc(roc.5) 
 
 
+#####
+#  6/26/17 - Try a large random grid search - 200 combinations 
+#      Note: 6/30/17 try depths below 10 but more trees
+####
+
+set.seed(1546)
+seeds <- vector(mode = "list", length = 26)
+for(i in 1:25) seeds[[i]] <- sample.int(1000, 50)
+seeds[[26]] <- sample.int(1000, 1) ## For the last model
+ctrlParSeeds <- trainControl(method='repeatedcv',number=5, repeats=5,allowParallel=TRUE,classProbs=TRUE,
+                        summaryFunction=twoClassSummary,sampling="smote",seeds=seeds)
+rand_search <- foreach(i=1:100, .combine='rbind') %do% {
+  set.seed(i*10)
+  randGrid <-expand.grid(interaction.depth =sample(1:10,1),
+                          n.trees = c(100*(1:80)),
+                          shrinkage = c(0.01),
+                          n.minobsinnode = sample(1:15,1))
+  c1 <- makeCluster(25)
+  registerDoParallel(c1)
+
+  trainIter <- train(PA.train[,-1],PA.train[,1],method='gbm',
+                     trControl=ctrlParSeeds,tuneGrid=randGrid,metric="ROC")
+  stopCluster(c1)
+  registerDoParallel()
+  trainIter$results
+}
+best <- rand_search[which.max(rand_search$ROC),]
+best
+#saveRDS(rand_search,file="Objects/PA_GBM_Models/6_30_17_randgrid.rds")
+
+rand_search <- readRDS(file="Objects/PA_GBM_Models/6_26_17_randgrid.rds")
+head(rand_search[order(-rand_search$ROC),])
+plot(ROC~interaction.depth,data=rand_search) #AUC increases with interaction.depth 
+plot(ROC~n.minobsinnode,data=rand_search) #No strong rel. between AUC and min obs in node
+plot(ROC~n.trees,data=rand_search) #Low interaction depths may have needed more trees
+plot(ROC~n.trees,data=subset(rand_search,interaction.depth<3)) #Depths below 8 may need more trees
+
+
+
+#Best found by random search: Depth 32, n.minobsinnode=12, trees= 800, AUC = 0.91595, AUC_SD = 0.0041
+#- also tested smaller interaction depths (<=10) with more trees, best = depth 9, n.minobsinnode=4, trees=2200, AUC= 0.9145, AUC_SD=0.005
+
+randGrid <-expand.grid(interaction.depth =c(9),
+                        n.trees = c(100*(1:25)),
+                        shrinkage = c(0.01),
+                        n.minobsinnode = c(4))
+c1 <- makeCluster(round(detectCores()*.5))
+registerDoParallel(c1)
+set.seed(3554)
+randTune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlPar,tuneGrid=randGrid,metric="ROC")
+#saveRDS(randTune,file="Objects/PA_GBM_Models/randBest_7_3_17.rds")
+randTune
+getTrainPerf(randTune)
+## STOP Parallel and restart
+stopCluster(c1)
+registerDoParallel()
+
+
+#check full training set AUC
+predicted.PA.train <- predict(randTune,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
+roc.obj <- roc(ifelse(PA.train$pres == "Present",1,0),pred=predicted.PA.train$Present)
+auc(roc.obj) #AUC 0.9556
+
+
+#test set perf
+predicted.PA.test <- predict(randTune,newdata=PA.test[,-1],type="prob",na.action=na.pass) #predict on test set
+roc.obj <- roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.test$Present)
+auc(roc.obj) # AUC 0.9082
+
+
+
+#compare best all depth vs best depth <=10
+all <- readRDS(file="Objects/PA_GBM_Models/randBest_6_26_17.rds")
+small <- readRDS(file="Objects/PA_GBM_Models/randBest_7_3_17.rds")
+resamp <- resamples(list("Best Overall"=all, "Small depth"=small))
+summary(resamp)
+trellis.par.set(theme1)
+bwplot(resamp, layout = c(2, 1))
+dotplot(resamp, metric = "ROC") 
+
 
 
 #####
@@ -236,31 +317,58 @@ auc(roc.5)
 #             Give stats for best ntrees value
 ####
 library(rBayesianOptimization)
+library(data.table)
+
+#Use our random grid search as the starting point for bayesian optimization
+rand_search <- readRDS(file="Objects/PA_GBM_Models/6_26_17_randgrid.rds")
+rand_search <- rand_search[order(-rand_search$ROC),]
+rand_search_init <- data.frame(unique(data.table(rand_search),by=c("interaction.depth","n.minobsinnode")))
+# remove depths below 9 because they did not have enough trees in our rand grid search (and do not perform as well even with enough trees)
+rand_search_init <- rand_search_init[rand_search_init$interaction.depth>8,c("interaction.depth","n.minobsinnode","ROC")] 
+colnames(rand_search_init)[3] <- "Value"
+
+
 
 gbmFit_bayes <- function(interaction.depth, n.minobsinnode){
     set.seed(15325)
-    n.trees <- seq(from=100,to=3000,by=100)
+    n.trees <- seq(from=100,to=5000,by=100)
     shrinkage <- 0.01
     ctrlParFast <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=TRUE,
                                 summaryFunction=twoClassSummary,
                                 sampling = "smote")
     model <- train(PA.train[,-1],PA.train[,1],method='gbm',metric="ROC",
-                   trControl=ctrlParFast, tuneGrid = data.frame(interaction.depth, n.trees, shrinkage, n.minobsinnode))
+                   trControl=ctrlPar, tuneGrid = data.frame(interaction.depth, n.trees, shrinkage, n.minobsinnode))
     list(Score = getTrainPerf(model)[, "TrainROC"], Pred = 0)
     
     
 }
 
 ## Define the bounds of the search
-bounds <- list(interaction.depth = c(1L,34L),
+bounds <- list(interaction.depth = c(9L,34L),
                n.minobsinnode = c(1L, 25L))
 
-bayes_search <- BayesianOptimization(gbmFit_bayes,bounds=bounds,    init_points = 20, #init_grid_dt=rand_search_bayes, 
+bayes_search <- BayesianOptimization(gbmFit_bayes,bounds=bounds, init_grid_dt=rand_search_init,  #   init_points = 20,
                                      n_iter=30,acq="ucb", kappa=1, eps=0.0, verbose=T,
                                      kernel=list(type="matern", nu=5/2))
-saveRDS(bayes_search3,file="Objects/PA_GBM_Models/6_19_17_bayes.rds")
+#saveRDS(bayes_search,file="Objects/PA_GBM_Models/7_3_17_bayes.rds")
 
 
+#Found by bayesian optimization (6/19/17): Depth 27, n.minobsinnode = 9, AUC = 0.91501
+#                               (7/3/17): Depth 32, n.minobsinnode=12, AUC = 0.9160 - same as best from random grid
+bayesGrid <-expand.grid(interaction.depth =c(27),
+                   n.trees = c(100*(1:30)),
+                   shrinkage = c(0.01),
+                   n.minobsinnode = c(9))
+c1 <- makeCluster(round(detectCores()*.5))
+registerDoParallel(c1)
+set.seed(8081)
+bayesTune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFast,tuneGrid=bayesGrid,metric="ROC")
+#saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbmTune_3_7_17v6.rds")
+bayesTune
+getTrainPerf(bayesTune)
+## STOP Parallel and restart
+stopCluster(c1)
+registerDoParallel()
 
 
 
@@ -276,6 +384,48 @@ predicted.PA.train <- predict(bestMod,newdata=PA.train[,-1],type="prob",na.actio
 t.opt <- optim.thresh((obs=as.numeric(pres.abs)),pred=predicted.PA.train$Present)
 predicted.PA.train.class <- ifelse(predicted.PA.train$Present> thresh,"Present","Absent")
 confusionMatrix(predicted.PA.train.class,pres.abs)
+
+
+
+
+
+
+
+
+
+#####
+#compare best models found by manual search, random grid search, and bayesian optimization
+#####
+
+resamps <- resamples(list("Bayesian Opt."=bayesTune,"Manual search"=bestMod, "Random grid"=randTune))
+summary(resamps)
+trellis.par.set(theme1)
+bwplot(resamps, layout = c(2, 1))
+dotplot(resamps, metric = "ROC")
+
+
+#refit all 3 "best model" candidates with more cross validations
+compareGrid <-expand.grid(interaction.depth =c(21,27,28),
+                          n.trees = c(50*(1:30)),
+                          shrinkage = c(0.01),
+                          n.minobsinnode = c(5,9,7))
+compareGrid <- compareGrid[(compareGrid$interaction.depth==21&compareGrid$n.minobsinnode==5)|
+                             (compareGrid$interaction.depth==27&compareGrid$n.minobsinnode==9)|
+                             (compareGrid$interaction.depth==28&compareGrid$n.minobsinnode==7),]
+c1 <- makeCluster(round(detectCores()*.7))
+registerDoParallel(c1)
+set.seed(8081)
+compareTune <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlPar,tuneGrid=compareGrid,metric="ROC")
+saveRDS(compareTune,file="Objects/PA_GBM_Models/compareTune_6_25_17.rds")
+compareTune
+getTrainPerf(compareTune)
+## STOP Parallel and restart
+stopCluster(c1)
+registerDoParallel()
+varImp(compareTune)
+
+
+
 
 
 

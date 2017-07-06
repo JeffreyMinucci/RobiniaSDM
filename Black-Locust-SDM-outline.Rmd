@@ -1,0 +1,424 @@
+---
+title: "Black Locust Species Distribution Modeling"
+author: "Jeffrey Minucci"
+date: "7/5/2017"
+output:
+  html_document:
+    df_print: paged
+    fig_caption: yes
+    fig_height: 5
+    fig_width: 7
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig_caption=T)
+knitr::opts_chunk$set(message=FALSE, 
+tidy.opts=list(width.cutoff=60))
+
+library(dismo)
+library(maptools)
+library(raster)
+library(maps)
+library(ggmap)
+library(rgdal)
+library(caret)
+library(SDMTools)
+library(gstat)
+library(doParallel)
+library(pROC)
+library(gbm)
+
+
+
+
+#Read data and format
+PA <- read.csv("Datafiles/data.national.6.5.csv") #now using reduced factors & elevation
+PA$lith.pred <- factor(PA$lith.pred)
+PA$Primary.rocktype <- factor(PA$Primary.rocktype)
+PA$Secondary.rocktype <- factor(PA$Secondary.rocktype)
+PA$usda_tex <- factor(PA$usda_tex)
+PA$pres <- factor(PA$pres,levels=c("Present",'Absent'))
+PA <- PA[,colnames(PA)!="PlotID"]
+PA <- PA[,c(6,9,1:5,7,8,10:length(PA))] #reorder to put responses first
+set.seed(1337)
+intrain <- createDataPartition(y=PA$pres,p=0.8,list=FALSE)
+PA.train.full <- PA[intrain,]
+PA.test.full <-  PA[-intrain,]
+PA.train <- PA.train.full[,c(-2)]
+PA.train <- PA.train[c(2,1:nrow(PA.train)),]  ### Put an absent as the first value
+PA.test <- PA.test.full[,c(-2)]
+PA.train.c <- PA.train[complete.cases(PA.train),]
+sdm1 <- readRDS("Objects/PA_GBM_Models/randBest_6_26_17.rds")
+
+###
+# Remove single case where usda_tex = 13 in test set (as there is no usda tex 13 in training set)
+#PA.test <- subset(PA.test,usda_tex != "13" | is.na(usda_tex))
+#PA.test$usda_tex <- droplevels(PA.test$usda_tex)
+```
+
+## Introduction
+
+Symbiotic N~2~-fixing plants can act as biogeochemical keystone species in forest ecosystems, providing massive inputs of nitrogen (N), typically during early succession. As a result, the presence of N~2~-fixers can cause increased N mineralization and nitrification rates, DIN pool sizes in soils, and productivity of non-fixing species (Minucci *et al.*, unpublished).
+
+Despite the importance of symbiotic N~2~-fixers in regulating forest biogeochemistry, we lack an understanding of what factors control the distribution and abundance of these species. As a result, it is difficult to predict how global change factors will alter the presence of N~2~-fixers in forests, potentially leading to declines in some forests and invasion of N~2~-fixers into new regions. 
+
+In the eastern US, one widespread leguminuous N~2~-fixing tree, *R. pseudoacacia* (or black locust) plays a key role in driving forest productivity and recovery from disturbance (Minucci *et al.*, unpublished). Despite its importance, the factors controlling its distribution are poorly understood. The vast majority of leguminous N~2~-fixing tree species are either tropical or subtropical in range and the group is dominant in hot, arid regions. Yet, the distribution of *R. pseudoacacia* is centered in the Appalachian mountains, a wet temperate region. Two previous attempts to model the distribution of *R. pseudoacacia*, either alone (Iversion *et al.*, 2007) or with other leguminous N~2~-fixers had poor performance in predicting current distribution patterns. 
+
+
+Here we utilized the USDA FS Foresty Inventory and Analysis (FIA) tree demographics dataset and machine learning methods to model *R. pseudoacacia* habitat suitability under current and future climate.
+
+Our goals were to determine :
+
+
+1. What climate, soil, geological, and forest structure factors drive the distribution of *R. pseudoacacia*?
+2. How will the distribution of *R. pseudoacacia* be altered under future climate scenarios?
+
+<br>
+<br>
+
+## Methods
+
+
+### Data sources
+
+<br>
+
+#### Tree demographics: Forest Service FIA data
+
+We used the most recent survey data for naturally regenerated forest plots in the Eastern US. We characterized *R. pseudoacacia* as either present or absent from each plot.
+
+* Total plot number: 82,023 plots 
+* Plots with *R. pseudoacacia present: 2586 (3.2%)
+
+```{r echo=FALSE,fig.cap="**All natural forest plots (left), and natural forest plots where *R. pseudoacacia* was present (right)**", fig.width=4, fig.height=4,fig.show='hold'}
+usa <- getData('GADM' , country="USA", level=1)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=PA,pch=3,cex=.01)
+
+usa <- getData('GADM' , country="USA", level=1)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.01)
+```
+
+
+<br>
+
+
+#### Forest structure
+
+From the Forest Service FIA dataset, we extracted data on:
+
+* Elevation
+* Slope
+* Aspect
+* Stand Age
+* Presence of fire disturbance
+
+We also included annual maximum green vegetation fraction (MGVF), a MODIS-based measurement of greenness (1 km^2^ resolution).  
+
+
+<br>
+
+#### Climate data
+
+For current climate data, we used **WorldClim 2.0** bioclimatic variables with 30 seconds (~1 km^2^) resolution.
+
+For projected climate in 2050, we used bioclimatic varibles extracted from all **CMIP5** general circulation models under the **RCP 8.5** pathway.
+
+<br>
+
+#### Geological data
+
+To capture differences in parent material, we used:
+
+* **USGS** classifications of parent material primary and secondary rock types
+
+To represent more general differences in surface lithology we used:
+
+* **USGS** maps of surfacial lithology (e.g. clayey glacial till, colluvial sediment)
+
+<br>
+
+#### Soil data
+
+We used the **Harominzed World Soil Database** to extract the following soil features:
+
+* pH
+* Cation exchange capacity (CEC)
+* USDA soil texture classification
+* Organic carbon content
+
+<br>
+<br>
+
+### Statistical modeling
+
+We used gradient boosted classification trees to model the liklihood of *R. pseudoacacia* presence at each plot. This method allowed us to automate parameter selection and the structure of high-level interactions between parameters. 
+
+<br>
+
+**Potential predictors:**
+
+* BIO1 = Annual Mean Temperature
+* BIO2 = Mean Diurnal Range (Mean of monthly (max temp - min temp))
+* BIO3 = Isothermality (BIO2/BIO7) (* 100)
+* BIO4 = Temperature Seasonality (standard deviation *100)
+* BIO5 = Max Temperature of Warmest Month
+* BIO6 = Min Temperature of Coldest Month
+* BIO7 = Temperature Annual Range (BIO5-BIO6)
+* BIO8 = Mean Temperature of Wettest Quarter
+* BIO9 = Mean Temperature of Driest Quarter
+* BIO10 = Mean Temperature of Warmest Quarter
+* BIO11 = Mean Temperature of Coldest Quarter
+* BIO12 = Annual Precipitation
+* BIO13 = Precipitation of Wettest Month
+* BIO14 = Precipitation of Driest Month
+* BIO15 = Precipitation Seasonality (Coefficient of Variation)
+* BIO16 = Precipitation of Wettest Quarter
+* BIO17 = Precipitation of Driest Quarter
+* BIO18 = Precipitation of Warmest Quarter
+* BIO19 = Precipitation of Coldest Quarter
+* Longitude
+* Latitude
+* Elevation
+* Stand age
+* Slope
+* Aspect
+* Presence of fire disturbance (yes/no)
+* Maximum green vegetation fraction (MGVF)
+* Surficial lithography
+* Parent material primary rock type
+* Parent material secondary rock type
+* Soil cation exchange capacity (CEC)
+* Soil pH
+* Soil USDA texture classification
+* Soil organic carbon 
+
+<br>
+
+We split our data into model training (80%) and test (20%) sets. Boosted classification trees were fit to the training set, with optimal hyperparameters determined using five repeats of five-fold cross validation and a random grid search. Goodness of fit was calculated with **AUROC**, the area under the receiver operating characteristic (ROC) curve.
+
+<br>
+
+**Optimial hyperparameters were determined to be:**
+
+* Interaction depth = 32
+* Minimum observations in a node = 12
+* Number of trees = 800
+* Learning rate = 0.01
+
+```{r echo=FALSE,fig.cap="Trajectory of fit versus number of trees", fig.width=5, fig.height=3.5}
+ggplot(sdm1,highlight=T,se=T)+theme_bw()+annotate("text",x=830,y=0.914,label="Optimal # of trees")
+```
+
+<br>
+<br>
+
+## Results
+
+<br>
+
+### Model performance
+
+<br>
+
+Our main assessment of model performance is **AUROC**, or area under the receiver operating characteristic (ROC) curve. This metric takes into account both sensitivity (true positive rate) and specificity (true negative rate) and is preferable to classification accuracy (%) when positive and negative outcomes are imbalanced (and in our case, *R. pseudoacacia* is present in only ~3% of plots).
+
+The best possible AUROC is 1, while the worst possible AUROC (a null model) would be 0.5.
+
+```{r echo=FALSE}
+trainROC <- getTrainPerf(sdm1)$TrainROC
+predicted.PA.test <- predict(sdm1,newdata=PA.test[,-1],type="prob",na.action=na.pass) 
+testROC <- auc(roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.test$Present))[1]
+```
+
+<br>
+
+
+#### Model accuracy
+
+
+Metric                               | Value
+-----------------------------------  | ----------
+Training set AUROC (cross-validated) | `r round(trainROC,3)`
+Test set AUROC                       | `r round(testROC,3)`
+
+
+<br>
+<br>
+
+
+
+### What factors were most important in determining presence of *R. pseudoacacia*?
+
+<br>
+
+
+Variable                   | Importance 
+-------------------------  | ----------
+Annual mean temperature    | 100.0
+Max temp. of warmest month | 81.2
+Primary parent rock type   | 75.1
+Slope                      | 41.1
+Aspect                     | 34.6
+Soil organic carbon        | 33.2
+
+```{r echo=FALSE,fig.cap="Relationship between annual mean temperature and probability of presence", fig.width=5, fig.height=3.5}
+plot(plot(sdm1$finalModel,i.var='bio1',type="response",return.grid=T),xlab="Annual mean temp. (C)",
+     ylab="Probabiliy of presence",type="l",xaxt="n") 
+axis(1,at=c(0,50,100,150,200),labels=c("0","5","10","15","20"))
+#rug(PA.train$bio1)
+```
+
+```{r echo=FALSE,fig.cap="Relationship between max temp. of warmest month and probability of presence", fig.width=5, fig.height=3.5}
+plot(plot(sdm1$finalModel,i.var='bio5',type="response",return.grid=T),xlab="Max temp. of warmest month (C)",
+     ylab="Probabiliy of presence",type="l",xaxt="n") #max temp of warmest month
+axis(1,at=c(200,250,300,350),labels=c("20","25","30","35"))
+#rug(PA.train$bio5)```
+```
+
+<br>
+
+#### Parent materials associated with *R. pseudoacacia* presence
+
+```{r echo=FALSE,fig.cap="Relationship between parent material type and probability of presence", fig.width=5, fig.height=3.5}
+rockgrid <- plot(sdm1$finalModel,i.var='Primary.rocktype',type="response",return.grid=T)
+rockgrid[,1] <- factor(rockgrid[,1],levels=as.character(rockgrid[order(rockgrid[,2]),1]))
+plot(rockgrid,ylab="Probability of presence",xlab="Parent material type")
+#rug(PA.train$bio5)```
+```
+
+Parent material type  | Probability of *R. pseudoacacia*
+--------------------- | ----------
+Biotite schist        | 74.0%
+Schist                | 65.1%
+Silt                  | 64.1%
+All others            | 29.2%
+
+
+
+```{r echo=FALSE,fig.cap="Relationship between slope and probability of presence", fig.width=5, fig.height=3.5}
+plot(plot(sdm1$finalModel,i.var='SLOPE',type="response",return.grid=T),xlab="Slope (ft rise per 100 ft)",
+     ylab="Probabiliy of presence",type="l") #max temp of warmest month
+#axis(1,at=c(200,250,300,350),labels=c("20","25","30","35"))
+#rug(PA.train$bio5)```
+```
+
+```{r echo=FALSE,fig.cap="Relationship between stand age and probability of presence", fig.width=5, fig.height=3.5}
+plot(plot(sdm1$finalModel,i.var='STDAGE',type="response",return.grid=T),xlab="Stand age (years)",
+     ylab="Probabiliy of presence",type="l") #max temp of warmest month
+#axis(1,at=c(200,250,300,350),labels=c("20","25","30","35"))
+#rug(PA.train$bio5)
+```
+
+```{r echo=FALSE,warning=FALSE,fig.cap="Relationship between soil organic content and probability of presence",fig.width=5, fig.height=3.5}
+plot(plot(sdm1$finalModel,i.var='OC',type="response",return.grid=T,continuous.resolution=200),xlim=c(0,2.5),
+     ylab="Probabiliy of presence",xlab="Soil organic carbon content (%)",type="l") #max temp of warmest month
+#axis(1,at=c(200,250,300,350),labels=c("20","25","30","35"))
+rug(PA.train$OC)
+```
+
+<br>
+<br>
+
+### Using our model to predict current distribution:
+
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE,fig.width=4.5, fig.height=4,fig.cap="Predicted probability of presence (left) versus actual distribution (right)",fig.show='hold'}
+# Get probability predictions for ALL DATA (test+train) 
+predicted.PA <- predict(sdm1,newdata=PA[,-c(1,2)],type="prob",na.action=na.pass) 
+PA.predict <- cbind(PA,predicted.PA)
+
+### Plot probability - as raster
+prob.spatial <- PA.predict[,c("LON","LAT","Present")]
+names(prob.spatial) <- c("x","y","z")
+e <- extent(prob.spatial[,1:2])
+r <- raster(e,ncol=130,100)
+x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
+plot(x,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+
+PA$col <- ifelse(PA.predict$pres == "Present","darkgreen","cornflowerblue")
+plot(LAT~LON, col=col,data=subset(PA,pres=="Absent"),pch=20,cex=.1)
+#xlim=c(-102.5,-62),ylim=c(25,50)
+points(LAT~LON, col=col,data=subset(PA,pres!="Absent"),pch=20,cex=.1, asp=1)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+#points(LAT~LON,data=PA,pch=3,cex=.01)
+
+```
+
+
+<br>
+<br>
+
+
+
+```{r, echo=FALSE,warning=FALSE,fig.width=6, fig.height=4.5,fig.cap="Plots where *R. pseudoacacia* is present overlaid on predicted probability"}
+# Get probability predictions for ALL DATA (test+train) 
+predicted.PA <- predict(sdm1,newdata=PA[,-c(1,2)],type="prob",na.action=na.pass) 
+PA.predict <- cbind(PA,predicted.PA)
+
+### Plot probability - as raster
+prob.spatial <- PA.predict[,c("LON","LAT","Present")]
+names(prob.spatial) <- c("x","y","z")
+e <- extent(prob.spatial[,1:2])
+r <- raster(e,ncol=130,100)
+x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
+plot(x,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+points(points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.01))
+```
+
+<br>
+<br>
+
+### Using our model to predict distribution in 2050
+
+<br>
+
+Using the average predictions for 17 GCMs (CMIP5 RCP8.5):
+
+```{r, echo=FALSE,warning=FALSE,fig.width=6, fig.height=4.5,fig.cap="Predicted probability of presence in 2050"}
+raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_unique.rds")
+
+#Presence/absence probability results (averaged for all GCMs)
+gcm_predict_avg <- overlay(raster_stack,fun=mean)
+plot(gcm_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+```
+
+<br>
+<br>
+
+Change from present distribution:
+
+```{r, echo=FALSE,warning=FALSE,fig.width=6, fig.height=4.5,fig.cap="Change in probability from current to 2050"}
+d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_unique.rds")
+gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
+plot(gcm_d_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+```
+
+```{r, echo=FALSE,warning=FALSE,fig.width=6, fig.height=4.5,fig.cap="Change in probability from current to 2050"}
+#plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+#points(LAT~LON,data=subset(PA,Primary.rocktype %in% c("72","16","45","15","19","45")),pch=3,cex=.1)
+```
+
+<br>
+<br>
+
+## Summary of findings
+
+<br>
+
+1. What climate, soil, geological, and forest structure factors drive the distribution of *R. pseudoacacia*?
+  + We found that climate, parent material, soil factors, and stand physical characteristics were all important predictors of *R.   pseudoacacia* distribution, with temperature and parent material being the best predictors. Probability of *R. pseudoacacia* occurance was greatest in areas with high mean annual temperature but low maximum summer temperatures and schist or silt geology. *R. pseudoacacia* was also found more frequently in highly sloped areas, potentially due to the greater frequency of disturbance on slopes. 
+ 
+2. How will the distribution of *R. pseudoacacia* be altered under future climate scenarios?
+  + Our model predicts a decline in habitat suitability over most of the current range of *R. pseudoacacia*, with the strongest declines in the southern Appalachian region (especially the Ridge and Valley region), the Ozarks, and the Bluegrass region of Kentucky. 
+  
+  + Our model also predicts a strong increase in habitat suitability at the nothern edge of the range (Michigan, Wisconsin, and central New York), suggesting a potential for *R. pseudoacacia* to expand northward. The invasion of *R. pseudoacacia* could greatly increase N cycling rates and N inputs to these forests. 
+

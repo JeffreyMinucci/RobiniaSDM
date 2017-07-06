@@ -20,7 +20,8 @@ library(doParallel)
 
 
 ### Load the best model
-sdm1 <- readRDS("Objects/gbmTune_3_7_17v2.rds")
+#sdm1 <- readRDS("Objects/gbmTune_3_7_17v2.rds")
+sdm1 <- readRDS("Objects/PA_GBM_Models/randBest_6_26_17.rds")
 #hurdle1 <- readRDSW
 
 #Read data
@@ -30,6 +31,8 @@ PA2$Primary.rocktype <- factor(PA$Primary.rocktype)
 PA2$Secondary.rocktype <- factor(PA$Secondary.rocktype)
 PA2$usda_tex <- factor(PA$usda_tex)
 PA2$pres <- factor(PA$pres,levels=c("Present",'Absent'))
+PA2 <- PA2[,colnames(PA)!="PlotID"]
+PA2 <- PA2[,c(6,9,1:5,7,8,10:length(PA2))] #reorder to put responses first
 
 
 #make predictions based on GCMs
@@ -41,7 +44,7 @@ results_list <- vector("list",length(gcms))
 raster_list <- vector("list",length(gcms))
 d_raster_list <- vector("list",length(gcms))
 for (i in 1:length(gcms)){
-  data <- readRDS(paste("Objects/GCM_prob_data/PA_climate_proj_",gcms[i],".rds",sep="")) #load climate proj. data
+  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj_",gcms[i],".rds",sep="")) #load climate proj. data
   predictions <- predict(sdm1,newdata=data[,-c(6)],type="prob",na.action=na.pass) #predict on projection
   data <- cbind(data,predictions)
   #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
@@ -122,3 +125,12 @@ d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_unique.rds")
 gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
 plot(gcm_d_predict_avg,interpolate=T)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+
+### TODO Get averaged predictors for gcms
+###   so that we can explore future climate 
+
+
+#In averaged projections, where is bio1 over 130 (inflection point for pres. prob.)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=subset(PA,bio1>130),pch=3,cex=.1)

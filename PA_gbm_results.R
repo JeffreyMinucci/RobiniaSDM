@@ -13,6 +13,7 @@ library(caret)
 library(SDMTools)
 library(gstat)
 library(doParallel)
+library(pROC)
 
 
 
@@ -43,13 +44,19 @@ saveRDS(PA.test.full,"Datafiles/Test_data_6.5.csv")
 ### Load the best model found so far (from PA_gbm_tuning code)
 ### Depth = 21, shrinkage=0.01, n.min.obsinnode = 5, n.trees=1300
 
-sdm1 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+sdm1# <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+#sdm2 <- readRDS("Objects/PA_GBM_Models/compareTune_6_25_17.rds")
+sdm1 <- readRDS("Objects/PA_GBM_Models/randBest_6_26_17.rds")
 
+#CV performance
+getTrainPerf(sdm1)
+getTrainPerf(sdm2)
+getTrainPerf(sdm3)
 
 
 #Find optimum threshold - base on training data
 pres.abs <- ifelse(PA.train$pres == "Present",1,0)
-predicted.PA.train <- predict(sdm1,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
+predicted.PA.train <- predict(sdm3,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
 t.opt <- optim.thresh((obs=as.numeric(pres.abs)),pred=predicted.PA.train$Present)
 thresh <- t.opt$`sensitivity=specificity`
 predicted.PA.train.class <- ifelse(predicted.PA.train$Present> thresh,"Present","Absent")
@@ -62,7 +69,7 @@ plot.roc(roc.obj,thresholds="best",print.thres="best")
 auc(roc.obj)
 
 
-#Test set performance
+#Test set performance - 0.9357 for Depth 21, min 5 (gbmTune_3_7_17_v2) - 0.9097 for depth 27, minobs 9
 predicted.PA.test <- predict(sdm1,newdata=PA.test[,-1],type="prob",na.action=na.pass) #predict on test set
 roc.obj <- roc(ifelse(PA.test$pres == "Present",1,0),pred=predicted.PA.test$Present)
 auc(roc.obj)
@@ -75,10 +82,15 @@ confusionMatrix(predicted.PA.test.class,PA.test[,1])
 varImp(sdm1)
 plot(sdm1$finalModel,i.var='Primary.rocktype',type="response")
 rock1 <- plot(sdm1$finalModel,i.var='Primary.rocktype',type="response",return.grid=T)
-rock1[order(rock1$y,decreasing=T),]
-#112 = granulite, 15 = chert, 114 = tuff,  74 = felsic metavolcanic rock, 72 = biotite schist
-#16 = schist, #45 = silt
+rock1 <- rock1[order(rock1$y,decreasing=T),]
+rock1
 
+
+#112 = granulite, 15 = chert, 114 = tuff,  74 = felsic metavolcanic rock, 72 = biotite schist
+#16 = schist, #45 = silt, 19= mica schist, 41 = claystone, 109 = 
+
+plot(sdm1$finalModel,i.var='bio1',type="response") #Mean annual temperature
+rug(PA.train$bio1)
 plot(sdm1$finalModel,i.var='bio3',type="response") #isothermality (large = more stable temp)
 rug(PA.train$bio3)
 plot(sdm1$finalModel,i.var='bio15',type="response") #Precipitation seasonality
@@ -93,22 +105,37 @@ plot(sdm1$finalModel,i.var='bio9',type="response") #temp of driest quarter
 rug(PA.train$bio9)
 plot(sdm1$finalModel,i.var='bio11',type="response") #mean temp of coldest quarter
 rug(PA.train$bio11)
-plot(plot(sdm1$finalModel,i.var='OC',type="response",return.grid=T),xlim=c(0,5),type='l',ylab="Predicted probability")
+plot(plot(sdm1$finalModel,i.var='OC',type="response",return.grid=T,continuous.resolution=200),xlim=c(0,5),type='l',ylab="Predicted probability")
 rug(PA.train$OC)
 plot(sdm1$finalModel,i.var='lith.pred',type="response")
 plot(sdm1$finalModel,i.var='LAT',type="response",continuous.resolution=100)
 plot(sdm1$finalModel,i.var='LON',type="response")
 plot(sdm1$finalModel,i.var='Primary.rocktype',type="response")
-plot(sdm1$finalModel,i.var='STDAGE',type="response")# more rops at "hot/sunny" sites?
-plot(sdm1$finalModel,i.var='ELEV',type="response")
+plot(sdm1$finalModel,i.var='STDAGE',type="response")#
+plot(plot(sdm1$finalModel,i.var='ELEV',type="response",return.grid=T,continuous.resolution=500),type='p')
 plot(sdm1$finalModel,i.var='SLOPE',type="response", continuous.resolution=100)
+plot(plot(sdm1$finalModel,i.var='SLOPE',type="response",return.grid=T,continuous.resolution=500),type='p')
 plot(sdm1$finalModel,i.var='asp_val',type="response",continuous.resolution=100)
-plot(sdm1$finalModel,i.var='ph',type="response",continuous.resolution=100)
-#find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("bio5","bio15"))
+plot(sdm1$finalModel,i.var='ph',type="response",continuous.resolution=100)#find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("bio5","bio15"))
 #find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("LAT","LON"))
 #gbm.interactions(sdm1$finalModel) #Not working!
 #gbm.plot(sdm2,n.plots=1) # doesnt work
 
+
+#Where is bio1 over 130 (the point where presence prob starts to decline again)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=subset(PA,bio1>130),pch=3,cex=.1)
+
+
+
+#Where is silt, schist, or biotite schist?
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=subset(PA,Primary.rocktype %in% c("72","16","45")),pch=3,cex=.1)
+
+#Where are primary rocktypes good for robinia (above 40% prob)
+
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
+points(LAT~LON,data=subset(PA,Primary.rocktype %in% rock1[rock1$y>.40,1]),pch=3,cex=.1)
 
 # Get probability predictions for ALL DATA (test+train) 
 predicted.PA <- predict(sdm1,newdata=PA[,-c(1,2)],type="prob",na.action=na.pass) 
@@ -119,33 +146,33 @@ confusionMatrix(PA.predict$predictedClass,PA.predict[,1])
 
 #Save plots where predicted class = "present" for regression analysis 
 PresentPlots <- PA.predict[PA.predict$predictedClass == "Present",]
-saveRDS(PresentPlots,"Datafiles/PresentPlots_4_14_17.rds")
+#saveRDS(PresentPlots,"Datafiles/PresentPlots_4_14_17.rds")
 
 #Save plots where predicted class = "absent" for later plotting / results
 AbsentPlots <- PA.predict[PA.predict$predictedClass == "Absent",]
-saveRDS(AbsentPlots,"Datafiles/AbsentPlots_4_14_17.rds")
+#saveRDS(AbsentPlots,"Datafiles/AbsentPlots_4_14_17.rds")
 
 
 #Save copy of all predictions
-saveRDS(PA.predict,"Datafiles/AllClassPredicts_4_14_17.rds")
+#saveRDS(PA.predict,"Datafiles/AllClassPredicts_4_14_17.rds")
 
 
 ######### Make maps of presence/absence
 
 #Plot points based on predicted pres vs abs (based on optimum thresh)
 usa <- getData('GADM' , country="USA", level=1)
-PA.predict$col <- ifelse(PA.predict$pres.abs.p == "Present","darkgreen","cornflowerblue")
+PA.predict$col <- ifelse(PA.predict$predictedClass == "Present","darkgreen","cornflowerblue")
 plot(PA.predict$LON,PA.predict$LAT,col=PA.predict$col,pch=20,xlim=c(-100,-70),ylim=c(25,50),asp=1,cex=.3)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
-points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.1)
+#points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.1)
 
 
 #Make interpolated plot via inverse distance weighting
-idw <- geoIDW(p=PA.predict[PA.predict$pres.abs.p=="Present",c(1,2)],
-              a=PA.predict[PA.predict$pres.abs.p=="Absent",c(1,2)])
+idw <- geoIDW(p=PA.predict[PA.predict$predictedClass=="Present",c(3,4)],
+              a=PA.predict[PA.predict$predictedClass=="Absent",c(3,4)])
 lithology <- reclassify(raster("Layers/us_lithology_1km_dd83.img"),cbind(0,NA))
 idw.p <- predict(lithology,idw,mask=TRUE)
-saveRDS(idw.p,"Objects/idw.p_8_31_16.rds")
+#saveRDS(idw.p,"Objects/idw.p_8_31_16.rds")
 plot(idw.p,main="Predicted Species Distribution",xlim=c(-100,-65),ylim=c(24.8,45.9))
 plot(usa,add=T)
 points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.1)
@@ -153,17 +180,18 @@ points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.1)
 
 
 ### Plot probability - as raster
-#prob.spatial <- PA.predict[,c("LON","LAT","Present")]
-#names(prob.spatial) <- c("x","y","z")
-#e <- extent(prob.spatial[,1:2])
-#r <- raster(e,ncol=130,100)
-#x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
-#plot(x,interpolate=T)
-#plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
-#saveRDS(x,"RasterOutput/current.prob_unique.rds")
-x <- readRDS("RasterOutput/current.prob_unique.rds") #loading from memory (code above)
+prob.spatial <- PA.predict[,c("LON","LAT","Present")]
+names(prob.spatial) <- c("x","y","z")
+e <- extent(prob.spatial[,1:2])
+r <- raster(e,ncol=130,100)
+x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
 plot(x,interpolate=T)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+saveRDS(x,"RasterOutput/current.prob_unique.rds")
+#x <- readRDS("RasterOutput/current.prob_unique.rds") #loading from memory (code above)
+#plot(x,interpolate=T)
+#plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+points(LAT~LON,data=subset(PA,pres=="Present"),pch=3,cex=.1)
 
 
 
