@@ -84,8 +84,11 @@ plot(sdm1$finalModel,i.var='Primary.rocktype',type="response")
 rock1 <- plot(sdm1$finalModel,i.var='Primary.rocktype',type="response",return.grid=T)
 rock1 <- rock1[order(rock1$y,decreasing=T),]
 rock1
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 3d521b03936cc3aa15965652269e102e0117c9cb
 #112 = granulite, 15 = chert, 114 = tuff,  74 = felsic metavolcanic rock, 72 = biotite schist
 #16 = schist, #45 = silt, 19= mica schist, 41 = claystone, 109 = 
 
@@ -128,6 +131,7 @@ points(LAT~LON,data=subset(PA,bio1>130),pch=3,cex=.1)
 
 
 
+<<<<<<< HEAD
 #Where is silt, schist, or biotite schist?
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
 points(LAT~LON,data=subset(PA,Primary.rocktype %in% c("72","16","45")),pch=3,cex=.1)
@@ -137,6 +141,8 @@ points(LAT~LON,data=subset(PA,Primary.rocktype %in% c("72","16","45")),pch=3,cex
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
 points(LAT~LON,data=subset(PA,Primary.rocktype %in% rock1[rock1$y>.40,1]),pch=3,cex=.1)
 
+=======
+>>>>>>> 3d521b03936cc3aa15965652269e102e0117c9cb
 # Get probability predictions for ALL DATA (test+train) 
 predicted.PA <- predict(sdm1,newdata=PA[,-c(1,2)],type="prob",na.action=na.pass) 
 PA.predict <- cbind(PA,predicted.PA)
