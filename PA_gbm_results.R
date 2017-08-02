@@ -44,7 +44,7 @@ saveRDS(PA.test.full,"Datafiles/Test_data_6.5.csv")
 ### Load the best model found so far (from PA_gbm_tuning code)
 ### Depth = 21, shrinkage=0.01, n.min.obsinnode = 5, n.trees=1300
 
-sdm1# <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+#sdm1 <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
 #sdm2 <- readRDS("Objects/PA_GBM_Models/compareTune_6_25_17.rds")
 sdm1 <- readRDS("Objects/PA_GBM_Models/randBest_6_26_17.rds")
 
@@ -93,6 +93,8 @@ plot(sdm1$finalModel,i.var='bio3',type="response") #isothermality (large = more 
 rug(PA.train$bio3)
 plot(sdm1$finalModel,i.var='bio15',type="response") #Precipitation seasonality
 rug(PA.train$bio15)
+plot(sdm1$finalModel,i.var='bio18',type="response") #Precip of warmest quarter
+rug(PA.train$bio18)
 plot(sdm1$finalModel,i.var='bio5',type="response") #max temp of warmest month
 rug(PA.train$bio5)
 plot(sdm1$finalModel,i.var='bio10',type="response") # Mean temp of warmest quarter
@@ -115,6 +117,11 @@ plot(sdm1$finalModel,i.var='SLOPE',type="response", continuous.resolution=100)
 plot(plot(sdm1$finalModel,i.var='SLOPE',type="response",return.grid=T,continuous.resolution=500),type='p')
 plot(sdm1$finalModel,i.var='asp_val',type="response",continuous.resolution=100)
 plot(sdm1$finalModel,i.var='ph',type="response",continuous.resolution=100)#find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("bio5","bio15"))
+plot(plot(sdm1$finalModel,i.var='cec',type="response",return.grid=T,continuous.resolution=200),type='l',ylab="Predicted probability")
+rug(PA.train$cec)
+plot(plot(sdm1$finalModel,i.var='fire',type="response",return.grid=T,continuous.resolution=200),type='l',ylab="Predicted probability")
+#rug(PA.train$cec)
+
 #find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("LAT","LON"))
 #gbm.interactions(sdm1$finalModel) #Not working!
 #gbm.plot(sdm2,n.plots=1) # doesnt work

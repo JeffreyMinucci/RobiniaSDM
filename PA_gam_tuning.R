@@ -51,11 +51,13 @@ registerDoParallel(c1)
 gam <- geoGAM(response="pres", covariates=names(PA.train.smote)[4:ncol(PA.train.smote)], data=PA.train.smote,
               coords=c("x","y"), non.stationary=T, seed=8081,
               verbose=1, cores=15,validation.data=PA.test)
-saveRDS(gam,"Objects/PA_GAM_Models/geoGam_6_25_17.rds")
+#saveRDS(gam,"Objects/PA_GAM_Models/geoGam_6_25_17.rds")
 
 
 stopCluster(c1)
 registerDoParallel()
+
+gam <- readRDS("Objects/PA_GAM_Models/geoGam_6_25_17.rds")
 
 summary(gam)
 summary(gam,what="path")

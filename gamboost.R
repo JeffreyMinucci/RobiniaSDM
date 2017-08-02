@@ -151,21 +151,14 @@ registerDoParallel(c1)
 set.seed(8081)
 
 logistic <- train(data.gam.PA.train[,-1],data.gam.PA.train[,1],method="glm",family="binomial",
-<<<<<<< HEAD
-                  trControl=trainControl(method="none"))
-=======
-                  trControl=ctrlPar)
->>>>>>> 3d521b03936cc3aa15965652269e102e0117c9cb
+trControl=trainControl(method="none"))
 #logistic <- glm(pres~.,data=data.gam.PA.train,family=binomial)
 
 stopCluster(c1)
 registerDoParallel()
 
-<<<<<<< HEAD
+
 predicted.PA.test <- predict(logistic,newdata=data.gam.PA.test,type="prob",na.action=na.pass) #predict on test set
-=======
-predicted.PA.test <- predict(logistic,newdata=data.gam.PA.test,type="response",na.action=na.pass) #predict on test set
->>>>>>> 3d521b03936cc3aa15965652269e102e0117c9cb
 roc.obj <- roc(ifelse(data.gam.PA.test$pres == "Present",1,0),pred=predicted.PA.test,metric="ROC")
 auc(roc.obj) #AUC = 0.8922
 summary(logistic)
@@ -183,19 +176,11 @@ registerDoParallel()
 
 
 ###random Forest w/smote - CV AUC = 0.9114
-<<<<<<< HEAD
 rfGrid <- expand.grid(mtry=c(1:3))
 set.seed(8081)
 c1 <- makeCluster(round(detectCores()*.5))
 registerDoParallel(c1)
 rfTune <- train(x=data.gam.PA.train[,-1],y=data.gam.PA.train[,1],method='rf', trControl=ctrlPar,metric="ROC",ntree=200,tuneGrid=rfGrid)
-=======
-rfGrid <- expand.grid(mtry=c(1:7))
-set.seed(8081)
-c1 <- makeCluster(round(detectCores()*.5))
-registerDoParallel(c1)
-rfTune <- train(x=data.gam.PA.train[,-1],y=data.gam.PA.train[,1],method='rf', trControl=ctrlPar,metric="ROC",ntree=600,tuneGrid=rfGrid)
->>>>>>> 3d521b03936cc3aa15965652269e102e0117c9cb
 rfTune
 ggplot(rfTune)
 plot(rfTune$finalModel)
@@ -207,3 +192,11 @@ predicted.PA.test <- predict(rfTune,newdata=data.gam.PA.test,type="prob",na.acti
 roc.obj <- roc(ifelse(data.gam.PA.test$pres == "Present",1,0),pred=predicted.PA.test$Present,metric="ROC")
 auc(roc.obj) #AUC = 0.9182
 varImp(rfTune)
+library(randomForest)
+partialPlot(rfTune$finalModel, data.gam.PA.train[,-1], x.var = "bio1",which.class="Present")
+partialPlot(rfTune$finalModel, data.gam.PA.train[,-1], x.var = "bio5",which.class="Present")
+partialPlot(rfTune$finalModel, data.gam.PA.train[,-1], x.var = "bio11",which.class="Present")
+x <- partialPlot(rfTune$finalModel, data.gam.PA.train[,-1], x.var = "bio5",which.class="Present",plot=F)
+plot(x$x,inv.logit(x$y),type='l')
+
+
