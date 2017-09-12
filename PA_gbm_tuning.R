@@ -233,6 +233,7 @@ auc(roc.5)
 #####
 #  6/26/17 - Try a large random grid search - 200 combinations 
 #      Note: 6/30/17 try depths below 10 but more trees
+#      Total models tried: 6/26 - 8000..... 6/30: 
 ####
 
 set.seed(1546)
@@ -375,7 +376,8 @@ registerDoParallel()
 ########
 # Best model so far
 ######
-bestMod <- readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+bestMod <-readRDS("Objects/PA_GBM_Models/randBest_6_26_17.rds")# readRDS("Objects/PA_GBM_Models/gbmTune_3_7_17v2.rds")
+
 
 getTrainPerf(bestMod)
 #Find optimum threshold for class "Present"- based on training data
@@ -387,6 +389,27 @@ confusionMatrix(predicted.PA.train.class,pres.abs)
 
 
 
+### 
+# Get accuracy % for best model (via CV)
+##
+
+ctrlParFastAcc <- trainControl(method='cv',number=5,allowParallel=TRUE,classProbs=TRUE,
+                            sampling = "smote")
+
+bestGrid <-expand.grid(interaction.depth =c(32),
+                        n.trees = c(100*(1:10)),
+                        shrinkage = c(0.01),
+                        n.minobsinnode = c(12))
+c1 <- makeCluster(round(detectCores()*.7))
+registerDoParallel(c1)
+set.seed(8081)
+bestTuneAcc <- train(PA.train[,-1],PA.train[,1],method='gbm', trControl=ctrlParFastAcc,tuneGrid=bestGrid,metric="Accuracy")
+#saveRDS(smote.tune,file="Objects/PA_GBM_Models/gbmTune_3_7_17v6.rds")
+bestTuneAcc
+getTrainPerf(bestTuneAcc)
+## STOP Parallel and restart
+stopCluster(c1)
+registerDoParallel()
 
 
 

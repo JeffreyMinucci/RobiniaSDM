@@ -1,0 +1,143 @@
+Primary.rocktype,COUNT,Name
+1,"257,057",water
+2,"551,251",shale
+3,"380,857",limestone
+4,"408,238",sand
+5,"381,294",sandstone
+6,"177,760",dolostone (dolomite)
+7,"14,861",conglomerate
+8,"24,146",beach sand
+9,"12,566",terrace
+10,"148,172",mudstone
+11,"28,594",black shale
+12,"12,871",arkose
+13,"18,576",metasedimentary rock
+14,"10,986",phyllite
+15,"13,073",chert
+16,"19,633",schist
+17,"5,669",amphibolite
+18,"1,201",greenstone
+19,"15,794",mica schist
+20,"14,650",quartzite
+21,"3,884",felsic gneiss
+22,401,pyroxenite
+23,"1,887",tonalite
+24,"3,025",marble
+25,166,trondhjemite
+26,97,dacite
+27,"8,198",carbonate
+28,"13,087",slate
+29,"1,981",mylonite
+30,"20,218",granitic gneiss
+31,668,orthogneiss
+32,"75,714",granite
+33,"1,438",quartz monzonite
+34,"3,327",granodiorite
+35,"1,627",mafic gneiss
+36,834,quartz-feldspar schist
+37,"401,398",clay or mud
+38,"1,661",augen gneiss
+39,"36,173",gneiss
+40,"1,440",quartz diorite
+41,"15,343",claystone
+42,"17,306",alluvial terrace
+43,"60,413",alluvium
+44,"1,014",dune sand
+45,"124,032",silt
+46,"43,344",gravel
+47,89,clastic
+48,"2,887",loess
+49,604,novaculite
+50,"7,048",gabbro
+51,32,alkalic intrusive rock
+52,"4,148",mixed clastic/carbonate
+53,217,volcanic rock (aphanitic)
+54,"32,149",basalt
+55,"44,808",siltstone
+56,"2,328",granofels
+57,"1,083",diabase
+58,208,calc-silicate rock
+59,182,norite
+60,46,ultramafic intrusive rock
+61,902,diorite
+62,2,lamprophyre
+63,479,syenite
+64,64, 
+65,11,greenschist
+66,"5,628",rhyolite
+67,2,pegmatite
+68,142,serpentinite
+69,"6,876",delta
+70,"5,266",calcarenite
+71,"28,376",biotite gneiss
+72,99,biotite schist
+73,652,amphibole schist
+74,"5,293",felsic metavolcanic rock
+75,"8,519",metavolcanic rock
+76,"13,220",mafic metavolcanic rock
+77,7,hornfels
+78,40,charnockite
+79,"9,197",unconsolidated deposit
+80,"4,716",evaporite
+82,256,glacial drift
+84,102,indeterminate
+85,"1,721",melange
+86,"21,415",graywacke
+87,"6,728",felsic volcanic rock
+88,8,quartz latite
+89,672,argillite
+90,"2,459",mafic volcanic rock
+91,341,andesite
+92,5,volcanic rock
+94,173,quartz monzodiorite
+95,33,monzodiorite
+96,814,migmatite
+97,199,quartz syenite
+98,117,alkali syenite
+99,523,alkali-granite (alaskite)
+100,26,breccia
+101,72,orthoquartzite
+102,32,meta-conglomerate
+103,"2,490",meta-basalt
+104,778,meta-rhyolite
+105,4,hornblendite
+106,"10,603",paragneiss
+107,2,sedimentary rock
+108,3,tectonic breccia
+109,30,tholeiite
+110,"5,366",monzonite
+111,102,sedimentary breccia
+112,"5,419",granulite
+113,17,volcanic breccia (agglomerate)
+114,446,tuff
+115,"1,586",pelitic schist
+116,6,porphyry
+117,827,iron formation
+118,"5,900",metamorphic rock
+119,13,gabbroid
+120,"1,987",troctolite
+121,"2,918",anorthosite
+122,"3,515",arenite
+123,"8,173",meta-argillite
+124,543,bimodal suite
+125,32,ignimbrite
+126,1,nepheline syenite
+127,"18,161",fine-grained mixed clastic
+128,766,granitoid
+129,945,trachyte
+131,"7,303",lake or marine deposit (non-glacial)
+132,247,intermediate metavolcanic rock
+133,431,landslide
+134,37,ash-flow tuff
+137,123,phyllonite
+138,"2,670",peat
+139,15,phonolite
+140,49,latite
+141,"4,609",alluvial fan
+142,69,playa
+143,19,coarse-grained mixed clastic
+144,480,medium-grained mixed clastic
+145,12,dunite
+147,13,ultramafic rock
+148,3,mafic rock
+149,29,aplite

@@ -38,7 +38,7 @@ PA.train.c <- PA.train[complete.cases(PA.train),]
 
 
 ## save test set for use in future model if needed
-saveRDS(PA.test.full,"Datafiles/Test_data_6.5.csv")
+#saveRDS(PA.test.full,"Datafiles/Test_data_6.5.csv")
 
 
 ### Load the best model found so far (from PA_gbm_tuning code)
@@ -56,10 +56,14 @@ getTrainPerf(sdm3)
 
 #Find optimum threshold - base on training data
 pres.abs <- ifelse(PA.train$pres == "Present",1,0)
-predicted.PA.train <- predict(sdm3,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
+predicted.PA.train <- predict(sdm1,newdata=PA.train[,-1],type="prob",na.action=na.pass) #predict on train
 t.opt <- optim.thresh((obs=as.numeric(pres.abs)),pred=predicted.PA.train$Present)
 thresh <- t.opt$`sensitivity=specificity`
 predicted.PA.train.class <- ifelse(predicted.PA.train$Present> thresh,"Present","Absent")
+confusionMatrix(predicted.PA.train.class,PA.train[,1])
+
+#above but with default thresh
+predicted.PA.train.class <- ifelse(predicted.PA.train$Present> 0.5,"Present","Absent")
 confusionMatrix(predicted.PA.train.class,PA.train[,1])
 
 
@@ -121,6 +125,9 @@ plot(plot(sdm1$finalModel,i.var='cec',type="response",return.grid=T,continuous.r
 rug(PA.train$cec)
 plot(plot(sdm1$finalModel,i.var='fire',type="response",return.grid=T,continuous.resolution=200),type='l',ylab="Predicted probability")
 #rug(PA.train$cec)
+plot(sdm1$finalModel,i.var='usda_tex',type="response")
+
+
 
 #find.int <- interact.gbm(sdm1$finalModel,PA.train[,-5],i.var=c("LAT","LON"))
 #gbm.interactions(sdm1$finalModel) #Not working!
@@ -140,6 +147,33 @@ points(LAT~LON,data=subset(PA,Primary.rocktype %in% c("72","16","45")),pch=3,cex
 
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
 points(LAT~LON,data=subset(PA,Primary.rocktype %in% rock1[rock1$y>.40,1]),pch=3,cex=.1)
+
+#Show primary rocktypes level frequency
+library(plyr)
+rock.table <- count(PA,'Primary.rocktype')
+rock.table$percent <- rock.table$freq / sum(rock.table$freq) * 100
+rock.table
+
+#merge rocktype frequency and probability of ROPS occurence
+merged.rock <- merge(rock1,rock.table)[order(merged.rock$y,decreasing=T),]
+
+#Add in names of rocks and P content (accoridng to Porder and Ramachandran 2013)
+#rock.names <- read.csv("Datafiles/Key_withNames.csv")
+#primary.rock.results <- merge(merged.rock,rock.names[,c(1,3)])
+#primary.rock.results <- primary.rock.results[order(primary.rock.results$y,decreasing=T),]
+primary.rock.report <- read.csv("Datafiles/PrimaryRockResults.csv")
+
+#Look at correlation between rock P content and prob of ROPS occurrence
+Pmodel <- lm(y~Median.P.content.ppm,data=primary.rock.report)
+summary(Pmodel) # No relatinoship
+pdf(file="ManuscriptFigures/PhosFig.pdf",width=5,height=6)
+par(mar=c(5,5,1,1))
+plot(y~Median.P.content.ppm,data=primary.rock.report,pch=19,bty='n',ylab="Probability of occurrence",
+     ylim=c(0,1),xlim=c(200,1400),xlab="Median P content (ppm)",cex=1.5,cex.lab=1.5,cex.axis=1.5)
+abline(Pmodel,lwd=5,col="grey40")
+legend(x=950,y=0.7, bty="n", legend=(expression(atop(R^2 == 0.02,"P = 0.58"))),cex=1.5)
+dev.off()
+
 
 # Get probability predictions for ALL DATA (test+train) 
 predicted.PA <- predict(sdm1,newdata=PA[,-c(1,2)],type="prob",na.action=na.pass) 
@@ -191,7 +225,7 @@ r <- raster(e,ncol=130,100)
 x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
 plot(x,interpolate=T)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
-saveRDS(x,"RasterOutput/current.prob_unique.rds")
+saveRDS(x,"RasterOutput/current.prob_final.rds")
 #x <- readRDS("RasterOutput/current.prob_unique.rds") #loading from memory (code above)
 #plot(x,interpolate=T)
 #plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
@@ -411,3 +445,20 @@ plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
 #
 #plot(bioclim$bio15,ylim=c(30,45))
 #plot(usa,add=T)
+
+
+### Get 5th and 95th percentiles of each predictor
+predictors <- colnames(PA)[c(3:7,9:28,33,34,36)]
+fifth <- vector()
+ninetyfifth <- vector()
+for(i in 1:length(predictors)){
+  fifth[i] <- quantile(PA[,predictors[i]],0.05,na.rm=T)
+  ninetyfifth[i] <- quantile(PA[,predictors[i]],0.95,na.rm=T)
+  #print(paste(c(predictors[i],fifth,ninetyfifth),sep="..."))
+}
+percentiles <- data.frame("Fifth"=fifth,"Ninety-Fifth"=ninetyfifth)
+write.csv(percentiles,"Figures/percentiles.csv")
+
+quantile(PA$mgvf.pred,0.05,na.rm=T)
+quantile(PA$mgvf.pred,0.95,na.rm=T)
+

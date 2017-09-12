@@ -35,6 +35,16 @@ PA2 <- PA2[,colnames(PA)!="PlotID"]
 PA2 <- PA2[,c(6,9,1:5,7,8,10:length(PA2))] #reorder to put responses first
 
 
+#Read original data and format
+PA <- read.csv("Datafiles/data.national.6.5.csv") #now using reduced factors & elevation
+PA$lith.pred <- factor(PA$lith.pred)
+PA$Primary.rocktype <- factor(PA$Primary.rocktype)
+PA$Secondary.rocktype <- factor(PA$Secondary.rocktype)
+PA$usda_tex <- factor(PA$usda_tex)
+PA$pres <- factor(PA$pres,levels=c("Present",'Absent'))
+PA <- PA[,colnames(PA)!="PlotID"]
+PA <- PA[,c(6,9,1:5,7,8,10:length(PA))] #reorder to put responses first
+
 #make predictions based on GCMs
 gcms <- c("AC","BC","CC","CN","GS","HD","HG","HE",
            "IN","IP","MI","MR","MC","MP","MG","NO") #list all GCMs
@@ -44,8 +54,8 @@ results_list <- vector("list",length(gcms))
 raster_list <- vector("list",length(gcms))
 d_raster_list <- vector("list",length(gcms))
 for (i in 1:length(gcms)){
-  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj_",gcms[i],".rds",sep="")) #load climate proj. data
-  predictions <- predict(sdm1,newdata=data[,-c(6)],type="prob",na.action=na.pass) #predict on projection
+  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj2_",gcms[i],".rds",sep="")) #load climate proj. data
+  predictions <- predict(sdm1,newdata=data[,-c(1)],type="prob",na.action=na.pass) #predict on projection
   data <- cbind(data,predictions)
   #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
   results_list[[i]] <- data #save results
@@ -61,7 +71,7 @@ for (i in 1:length(gcms)){
   names(raster_list)[i] <- gcms[i]
   
   #create and save raster of results as change from current
-  current_raster <- readRDS("RasterOutput/current.prob_unique.rds")
+  current_raster <- readRDS("RasterOutput/current.prob_final.rds")
   delta.raster <- x - current_raster
   d_raster_list[[i]] <- delta.raster
   names(d_raster_list)[i]<- gcms[i]
@@ -74,8 +84,8 @@ for (i in 1:length(gcms)){
 #convert rasters to rasterstacks
 raster_stack <- stack(raster_list)
 d_raster_stack <- stack(d_raster_list)
-#saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_unique.rds")
-#saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_unique.rds") #for change (delta) from present
+saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_final.rds")
+saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_final.rds") #for change (delta) from present
 
 ########
 ## 
@@ -90,7 +100,7 @@ for(i in 1:8){
 }
 
 
-raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_unique.rds")
+raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_final.rds")
 
 
 #Presence/absence probability results (averaged for all GCMs)
@@ -121,7 +131,7 @@ plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
 
 
 #plot change from current probability (averaged for all GCMs)
-d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_unique.rds")
+d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_final.rds")
 gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
 plot(gcm_d_predict_avg,interpolate=T)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
@@ -134,3 +144,185 @@ plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
 #In averaged projections, where is bio1 over 130 (inflection point for pres. prob.)
 plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE)
 points(LAT~LON,data=subset(PA,bio1>130),pch=3,cex=.1)
+
+
+
+
+
+####### 
+# Project future climate but with current MAX temp of warmest month!
+######
+
+
+results_list <- vector("list",length(gcms))
+raster_list <- vector("list",length(gcms))
+d_raster_list <- vector("list",length(gcms))
+for (i in 1:length(gcms)){
+  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj2_",gcms[i],".rds",sep="")) #load climate proj. data
+  data$bio5 <- PA$bio5
+  predictions <- predict(sdm1,newdata=data[,-c(1)],type="prob",na.action=na.pass) #predict on projection
+  data <- cbind(data,predictions)
+  #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
+  results_list[[i]] <- data #save results
+  names(results_list)[i] <- gcms[i]
+  
+  #create and save raster of results as probability
+  prob.spatial <- data[,c("LON","LAT","Present")]
+  names(prob.spatial) <- c("x","y","z")
+  e <- extent(prob.spatial[,1:2])
+  r <- raster(e,ncol=130,100)
+  x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
+  raster_list[[i]] <- x
+  names(raster_list)[i] <- gcms[i]
+  
+  #create and save raster of results as change from current
+  current_raster <- readRDS("RasterOutput/current.prob_final.rds")
+  delta.raster <- x - current_raster
+  d_raster_list[[i]] <- delta.raster
+  names(d_raster_list)[i]<- gcms[i]
+}
+
+#saveRDS(results_list,"Objects/gcm_predictions_unique.rds")
+#saveRDS(raster_list,"RasterOutput/gcm_predict_rasters.rds")
+#saveRDS(d_raster_list,"RasterOutput/gcm_predict_rasters_delta.rds")
+
+#convert rasters to rasterstacks
+raster_stack <- stack(raster_list)
+d_raster_stack <- stack(d_raster_list)
+saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_noMAX.rds")
+saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_noMAX.rds") #for change (delta) from present
+
+
+
+#Presence/absence probability results (averaged for all GCMs) - for normal MAX temp
+raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_noMAX.rds")
+gcm_predict_avg <- overlay(raster_stack,fun=mean)
+plot(gcm_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+#plot change from current probability (averaged for all GCMs) - FOR normal MAX temp
+d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_noMAX.rds")
+gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
+plot(gcm_d_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+
+
+
+####### 
+# Project future precip but current temps!
+######
+
+
+results_list <- vector("list",length(gcms))
+raster_list <- vector("list",length(gcms))
+d_raster_list <- vector("list",length(gcms))
+for (i in 1:length(gcms)){
+  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj2_",gcms[i],".rds",sep="")) #load climate proj. data
+  data[,9:19] <- PA[,10:20]
+  predictions <- predict(sdm1,newdata=data[,-c(1)],type="prob",na.action=na.pass) #predict on projection
+  data <- cbind(data,predictions)
+  #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
+  results_list[[i]] <- data #save results
+  names(results_list)[i] <- gcms[i]
+  
+  #create and save raster of results as probability
+  prob.spatial <- data[,c("LON","LAT","Present")]
+  names(prob.spatial) <- c("x","y","z")
+  e <- extent(prob.spatial[,1:2])
+  r <- raster(e,ncol=130,100)
+  x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
+  raster_list[[i]] <- x
+  names(raster_list)[i] <- gcms[i]
+  
+  #create and save raster of results as change from current
+  current_raster <- readRDS("RasterOutput/current.prob_final.rds")
+  delta.raster <- x - current_raster
+  d_raster_list[[i]] <- delta.raster
+  names(d_raster_list)[i]<- gcms[i]
+}
+
+#saveRDS(results_list,"Objects/gcm_predictions_unique.rds")
+#saveRDS(raster_list,"RasterOutput/gcm_predict_rasters.rds")
+#saveRDS(d_raster_list,"RasterOutput/gcm_predict_rasters_delta.rds")
+
+#convert rasters to rasterstacks
+raster_stack <- stack(raster_list)
+d_raster_stack <- stack(d_raster_list)
+saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_noTemp.rds")
+saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_noTemp.rds") #for change (delta) from present
+
+
+#Presence/absence probability results (averaged for all GCMs) - for normal temps
+raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_noTemp.rds")
+gcm_predict_avg <- overlay(raster_stack,fun=mean)
+plot(gcm_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+#plot change from current probability (averaged for all GCMs) - FOR normal temps
+d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_noTemp.rds")
+gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
+plot(gcm_d_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+
+
+####### 
+# Project future climate but with current MAT
+######
+
+
+results_list <- vector("list",length(gcms))
+raster_list <- vector("list",length(gcms))
+d_raster_list <- vector("list",length(gcms))
+for (i in 1:length(gcms)){
+  data <- readRDS(paste("Objects/GCM_proj_data/PA_climate_proj2_",gcms[i],".rds",sep="")) #load climate proj. data
+  data$bio1 <- PA$bio1
+  predictions <- predict(sdm1,newdata=data[,-c(1)],type="prob",na.action=na.pass) #predict on projection
+  data <- cbind(data,predictions)
+  #data$pres.abs.p <- ifelse(data$Present>thresh,"Present","Absent")
+  results_list[[i]] <- data #save results
+  names(results_list)[i] <- gcms[i]
+  
+  #create and save raster of results as probability
+  prob.spatial <- data[,c("LON","LAT","Present")]
+  names(prob.spatial) <- c("x","y","z")
+  e <- extent(prob.spatial[,1:2])
+  r <- raster(e,ncol=130,100)
+  x <- rasterize(prob.spatial[,1:2],r,prob.spatial[,3],fun=mean)
+  raster_list[[i]] <- x
+  names(raster_list)[i] <- gcms[i]
+  
+  #create and save raster of results as change from current
+  current_raster <- readRDS("RasterOutput/current.prob_unique.rds")
+  delta.raster <- x - current_raster
+  d_raster_list[[i]] <- delta.raster
+  names(d_raster_list)[i]<- gcms[i]
+}
+
+#saveRDS(results_list,"Objects/gcm_predictions_unique.rds")
+#saveRDS(raster_list,"RasterOutput/gcm_predict_rasters.rds")
+#saveRDS(d_raster_list,"RasterOutput/gcm_predict_rasters_delta.rds")
+
+#convert rasters to rasterstacks
+raster_stack <- stack(raster_list)
+d_raster_stack <- stack(d_raster_list)
+saveRDS(raster_stack,"RasterOutput/gcm_predict_rasters_noMAT.rds")
+saveRDS(d_raster_stack,"RasterOutput/gcm_predict_rasters_delta_noMAT.rds") #for change (delta) from present
+
+
+
+#Presence/absence probability results (averaged for all GCMs) - for normal MAT
+raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_noMAT.rds")
+gcm_predict_avg <- overlay(raster_stack,fun=mean)
+plot(gcm_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+#plot change from current probability (averaged for all GCMs) - FOR normal MAT
+d_raster_stack <- readRDS("RasterOutput/gcm_predict_rasters_delta_noMAT.rds")
+gcm_d_predict_avg <- overlay(d_raster_stack,fun=mean)
+plot(gcm_d_predict_avg,interpolate=T)
+plot(usa,xlim=c(-90,-70),ylim=(c(25,50)),axes=TRUE,add=T)
+
+
+
