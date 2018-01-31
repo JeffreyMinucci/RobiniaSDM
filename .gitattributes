@@ -1,1 +1,3 @@
 *.html linguist-vendored
+Datafiles/ linguist-vendored
+Objects/ linguist-vendored
